@@ -18,6 +18,11 @@ export function SummaryScreen({ summary, onHome, onUpgrades, onAgain }: {
       <div className="w-full max-w-sm rounded-lg border border-white/20 bg-stone-900 p-6 text-white shadow-2xl">
         <h2 className="text-2xl font-bold">{CAUSE_LABEL[summary.cause]}</h2>
         <p className="mt-1 text-sm text-white/60">Reached Wave {summary.waveReached}</p>
+        {summary.gambleBusted && (
+          <p className="mt-2 rounded bg-rose-500/20 px-2 py-1 text-xs font-semibold text-rose-200">
+            Gamble ×{summary.gambleMult} busted — scrap penalty applied.
+          </p>
+        )}
         <div className="mt-4 grid grid-cols-2 gap-2 rounded bg-black/40 p-3 text-sm">
           <div>Unsecured before</div><div className="text-right font-mono">{summary.unsecuredBefore}</div>
           <div className="text-emerald-300">Banked</div><div className="text-right font-mono text-emerald-300">+{summary.banked}</div>

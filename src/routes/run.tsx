@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRunStore } from "@/store/useRunStore";
 import { useMetaStore } from "@/store/useMetaStore";
 import { Arena } from "@/components/game/Arena";
@@ -21,6 +21,7 @@ function RunPage() {
   const cashOut = useRunStore((s) => s.cashOut);
   const surrender = useRunStore((s) => s.surrender);
   const startRun = useRunStore((s) => s.startRun);
+  const markSummaryPersisted = useRunStore((s) => s.markSummaryPersisted);
 
   const secured = useMetaStore((s) => s.securedScrap);
   const upgrades = useMetaStore((s) => s.upgrades);
@@ -28,23 +29,26 @@ function RunPage() {
   const hydrate = useMetaStore((s) => s.hydrate);
   const navigate = useNavigate();
 
+  const bankedKeyRef = useRef<string | null>(null);
+
   useEffect(() => { hydrate(); }, [hydrate]);
 
-  // If user lands directly on /run without starting, send them to lobby.
   useEffect(() => {
     if (phase === "idle") navigate({ to: "/play" });
   }, [phase, navigate]);
 
-  // When run ends, bank the banked amount once.
+  // Bank scrap exactly once per ended summary, for ALL causes.
   useEffect(() => {
-    if (phase === "ended" && endSummary && endSummary.securedAfter === -1) {
-      addSecured(endSummary.banked);
-      // patch securedAfter for display
-      useRunStore.setState({
-        endSummary: { ...endSummary, securedAfter: secured + endSummary.banked },
-      });
-    }
-  }, [phase, endSummary, addSecured, secured]);
+    if (phase !== "ended" || !endSummary || endSummary.persisted) return;
+    // Identify this summary so we only bank it once.
+    const key = `${endSummary.cause}-${endSummary.waveReached}-${endSummary.banked}-${endSummary.unsecuredBefore}`;
+    if (bankedKeyRef.current === key) return;
+    bankedKeyRef.current = key;
+    addSecured(endSummary.banked);
+    // Read fresh secured after write to display accurate total.
+    const newSecured = useMetaStore.getState().securedScrap;
+    markSummaryPersisted(newSecured);
+  }, [phase, endSummary, addSecured, markSummaryPersisted]);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-black">
@@ -62,17 +66,20 @@ function RunPage() {
 
       {phase === "cashout" && (
         <CashoutModal
-          onContinue={() => beginNextWave()}
+          onContinue={(gambleMult, penalty) => {
+            bankedKeyRef.current = null;
+            beginNextWave(gambleMult, penalty);
+          }}
           onCashout={() => cashOut(secured)}
         />
       )}
 
-      {phase === "ended" && endSummary && endSummary.securedAfter !== -1 && (
+      {phase === "ended" && endSummary && endSummary.persisted && (
         <SummaryScreen
           summary={endSummary}
           onHome={() => { useRunStore.setState({ phase: "idle" }); navigate({ to: "/" }); }}
           onUpgrades={() => { useRunStore.setState({ phase: "idle" }); navigate({ to: "/upgrades" }); }}
-          onAgain={() => { startRun(upgrades); }}
+          onAgain={() => { bankedKeyRef.current = null; startRun(upgrades); }}
         />
       )}
     </div>

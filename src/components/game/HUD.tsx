@@ -8,6 +8,7 @@ export function HUD() {
   const phase = useRunStore((s) => s.phase);
   const kills = useRunStore((s) => s.kills);
   const roundTimer = useRunStore((s) => s.roundTimer);
+  const gambleMult = useRunStore((s) => s.gambleMult);
 
   const mm = Math.floor(roundTimer / 60).toString().padStart(1, "0");
   const ss = Math.floor(roundTimer % 60).toString().padStart(2, "0");
@@ -18,6 +19,11 @@ export function HUD() {
         <div className="rounded bg-black/70 px-3 py-1.5">
           Wave <span className="font-bold text-amber-300">{wave}</span>
           <span className="ml-2 text-xs text-white/60 uppercase">{phase}</span>
+          {gambleMult > 1 && (
+            <span className="ml-2 rounded bg-rose-500/30 px-2 py-0.5 text-xs font-bold text-rose-200">
+              GAMBLE ×{gambleMult}
+            </span>
+          )}
         </div>
         <Stat label="Time" value={`${mm}:${ss}`} accent={roundTimer < 10 ? "#ff6b6b" : "#e8edf3"} />
         <Stat label="Kills" value={kills} />
