@@ -429,6 +429,30 @@ export const useRunStore = create<RunState>((set, get) => ({
       }
     }
 
+    // ----- Regeneration (HP + ammo) -----
+    // Difficulty divisor: higher gamble multiplier => slower regen.
+    if (P.alive) {
+      const diffDiv = Math.max(1, s.gambleMult);
+      const hpRate = (BALANCE.regen.hpPerSec * P.regenMult) / diffDiv;
+      const ammoRate = (BALANCE.regen.ammoPerSec * P.regenMult) / diffDiv;
+      if (P.hp < P.maxHp && P.hitRecentTimer <= 0) {
+        P.hpRegenAcc += hpRate * dt;
+        if (P.hpRegenAcc >= 1) {
+          const add = Math.floor(P.hpRegenAcc);
+          P.hp = Math.min(P.maxHp, P.hp + add);
+          P.hpRegenAcc -= add;
+        }
+      }
+      if (P.ammo < P.maxAmmo) {
+        P.ammoRegenAcc += ammoRate * dt;
+        if (P.ammoRegenAcc >= 1) {
+          const add = Math.floor(P.ammoRegenAcc);
+          P.ammo = Math.min(P.maxAmmo, P.ammo + add);
+          P.ammoRegenAcc -= add;
+        }
+      }
+    }
+
     // ----- Round timer -----
     const roundTimer = Math.max(0, s.roundTimer - dt);
 
