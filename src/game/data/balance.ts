@@ -14,6 +14,17 @@ export const BALANCE = {
     maxAmmo: 60,
     ammoRefillOnWave: 30,
   },
+  regen: {
+    hpPerSec: 1.5,          // base HP regenerated per second
+    ammoPerSec: 2.0,        // base ammo regenerated per second
+    delayAfterHitSec: 2.0,  // HP regen pauses briefly after taking damage
+  },
+  melee: {
+    baseDamage: 18,
+    range: 56,
+    cooldown: 0.45,
+    arcDeg: 130,
+  },
   gun: {
     // Semi-auto: triggered by a tap (key/button press edge). Stronger, slower.
     semi: {

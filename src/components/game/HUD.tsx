@@ -32,7 +32,12 @@ export function HUD() {
       <div className="flex flex-wrap gap-3">
         <Bar label="HP" value={player.hp} max={player.maxHp} color="#e85d3a" />
         <Bar label="RIG" value={rig.hp} max={rig.maxHp} color="#c9a84c" />
-        <Bar label="AMMO" value={player.ammo} max={player.maxAmmo} color="#73ffb8" />
+        <Bar
+          label={player.ammo <= 0 ? "MELEE" : "AMMO"}
+          value={player.ammo}
+          max={player.maxAmmo}
+          color={player.ammo <= 0 ? "#ff6b6b" : "#73ffb8"}
+        />
       </div>
     </div>
   );

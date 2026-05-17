@@ -60,7 +60,12 @@ function makePlayer(upgrades: Partial<Record<UpgradeId, number>>): Player {
   const atkLvl = upgrades.attack ?? 0;
   const defLvl = upgrades.defense ?? 0;
   const spdLvl = upgrades.speed ?? 0;
+  const ammoLvl = upgrades.startAmmo ?? 0;
+  const wpnLvl = upgrades.weaponDamage ?? 0;
+  const meleeLvl = upgrades.melee ?? 0;
+  const regenLvl = upgrades.regenRate ?? 0;
   const maxHp = BALANCE.player.baseMaxHp + 15 * hpLvl;
+  const maxAmmo = BALANCE.player.maxAmmo + 10 * ammoLvl;
   return {
     pos: { x: BALANCE.arena.width / 2, y: BALANCE.arena.height / 2 + 90 },
     hp: maxHp,
@@ -72,10 +77,17 @@ function makePlayer(upgrades: Partial<Record<UpgradeId, number>>): Player {
     invulnTimer: 0,
     facing: 0,
     alive: true,
-    ammo: BALANCE.player.maxAmmo,
-    maxAmmo: BALANCE.player.maxAmmo,
+    ammo: maxAmmo,
+    maxAmmo,
     fireCooldown: 0,
     holdTime: 0,
+    weaponBonus: 3 * wpnLvl,
+    meleeBonus: 5 * meleeLvl,
+    meleeCooldown: 0,
+    regenMult: 1 + 0.25 * regenLvl,
+    hpRegenAcc: 0,
+    ammoRegenAcc: 0,
+    hitRecentTimer: 0,
   };
 }
 
@@ -273,6 +285,8 @@ export const useRunStore = create<RunState>((set, get) => ({
     P.attackCooldown = Math.max(0, P.attackCooldown - dt);
     P.invulnTimer = Math.max(0, P.invulnTimer - dt);
     P.fireCooldown = Math.max(0, P.fireCooldown - dt);
+    P.meleeCooldown = Math.max(0, P.meleeCooldown - dt);
+    P.hitRecentTimer = Math.max(0, P.hitRecentTimer - dt);
 
     // ----- Gun firing -----
     // Determine aim: movement direction, or nearest enemy if standing still.
@@ -282,22 +296,54 @@ export const useRunStore = create<RunState>((set, get) => ({
       if (n) aim = Math.atan2(n.pos.y - P.pos.y, n.pos.x - P.pos.x);
     }
 
-    // Semi: instant shot on press edge.
-    if (P.alive && s.input.firePressed && P.fireCooldown <= 0 && P.ammo >= BALANCE.gun.semi.ammoCost) {
-      bullets.push(fireBullet(P, "semi", aim));
-      P.ammo -= BALANCE.gun.semi.ammoCost;
-      P.fireCooldown = BALANCE.gun.semi.cooldown;
+    // Melee fallback (ammo depleted): swing on tap, hits enemies in arc in front.
+    const doMelee = (): void => {
+      if (!P.alive || P.meleeCooldown > 0) return;
+      const dmg = BALANCE.melee.baseDamage + P.meleeBonus;
+      const range = BALANCE.melee.range;
+      const halfArc = (BALANCE.melee.arcDeg * Math.PI) / 360;
+      for (const e of enemies) {
+        if (e.hp <= 0) continue;
+        const dx = e.pos.x - P.pos.x;
+        const dy = e.pos.y - P.pos.y;
+        const d = Math.hypot(dx, dy);
+        if (d > range + e.radius) continue;
+        const ang = Math.atan2(dy, dx);
+        let diff = Math.abs(((ang - aim + Math.PI) % (Math.PI * 2)) - Math.PI);
+        if (diff <= halfArc) e.hp -= computeDamage(dmg, e.defense);
+      }
+      P.meleeCooldown = BALANCE.melee.cooldown;
       P.facing = aim;
+    };
+
+    // Semi: instant shot on press edge. If no ammo, fall back to melee swing.
+    if (P.alive && s.input.firePressed && P.fireCooldown <= 0) {
+      if (P.ammo >= BALANCE.gun.semi.ammoCost) {
+        const b = fireBullet(P, "semi", aim);
+        b.damage += P.weaponBonus;
+        bullets.push(b);
+        P.ammo -= BALANCE.gun.semi.ammoCost;
+        P.fireCooldown = BALANCE.gun.semi.cooldown;
+        P.facing = aim;
+      } else {
+        doMelee();
+      }
     }
 
     // Track hold time. If still held past threshold, auto-fire at auto cadence.
     if (s.input.fireHeld) {
       P.holdTime += dt;
-      if (P.alive && P.holdTime >= BALANCE.gun.holdToAutoSec && P.fireCooldown <= 0 && P.ammo >= BALANCE.gun.auto.ammoCost) {
-        bullets.push(fireBullet(P, "auto", aim));
-        P.ammo -= BALANCE.gun.auto.ammoCost;
-        P.fireCooldown = BALANCE.gun.auto.cooldown;
-        P.facing = aim;
+      if (P.alive && P.holdTime >= BALANCE.gun.holdToAutoSec && P.fireCooldown <= 0) {
+        if (P.ammo >= BALANCE.gun.auto.ammoCost) {
+          const b = fireBullet(P, "auto", aim);
+          b.damage += P.weaponBonus;
+          bullets.push(b);
+          P.ammo -= BALANCE.gun.auto.ammoCost;
+          P.fireCooldown = BALANCE.gun.auto.cooldown;
+          P.facing = aim;
+        } else if (P.meleeCooldown <= 0) {
+          doMelee();
+        }
       }
     } else {
       P.holdTime = 0;
@@ -326,11 +372,11 @@ export const useRunStore = create<RunState>((set, get) => ({
     bullets = liveBullets;
 
     // ----- Enemy AI + contact damage -----
+    // Priority target is ALWAYS the rig. Enemies only "attack" the hero by
+    // physical proximity (they walk past toward the rig and brush the player).
     for (const e of enemies) {
-      const toPlayer = dist(e.pos, P.pos);
-      const target: Vec2 = (P.alive && toPlayer <= e.aggroRadius) ? P.pos : R.pos;
-      const dx = target.x - e.pos.x;
-      const dy = target.y - e.pos.y;
+      const dx = R.pos.x - e.pos.x;
+      const dy = R.pos.y - e.pos.y;
       const m = Math.hypot(dx, dy) || 1;
       e.pos.x += (dx / m) * e.speed * dt;
       e.pos.y += (dy / m) * e.speed * dt;
@@ -345,6 +391,7 @@ export const useRunStore = create<RunState>((set, get) => ({
       if (P.alive && dPl <= e.radius + 16 && e.contactTimer <= 0 && P.invulnTimer <= 0) {
         P.hp -= computeDamage(e.attack, P.defense);
         P.invulnTimer = BALANCE.player.invulnAfterHit;
+        P.hitRecentTimer = BALANCE.regen.delayAfterHitSec;
         e.contactTimer = e.contactInterval;
       }
     }
@@ -379,6 +426,30 @@ export const useRunStore = create<RunState>((set, get) => ({
       while (passiveTimer >= 1) {
         unsecured += Math.round(BALANCE.rig.passiveScrapPerSec * rewardMult);
         passiveTimer -= 1;
+      }
+    }
+
+    // ----- Regeneration (HP + ammo) -----
+    // Difficulty divisor: higher gamble multiplier => slower regen.
+    if (P.alive) {
+      const diffDiv = Math.max(1, s.gambleMult);
+      const hpRate = (BALANCE.regen.hpPerSec * P.regenMult) / diffDiv;
+      const ammoRate = (BALANCE.regen.ammoPerSec * P.regenMult) / diffDiv;
+      if (P.hp < P.maxHp && P.hitRecentTimer <= 0) {
+        P.hpRegenAcc += hpRate * dt;
+        if (P.hpRegenAcc >= 1) {
+          const add = Math.floor(P.hpRegenAcc);
+          P.hp = Math.min(P.maxHp, P.hp + add);
+          P.hpRegenAcc -= add;
+        }
+      }
+      if (P.ammo < P.maxAmmo) {
+        P.ammoRegenAcc += ammoRate * dt;
+        if (P.ammoRegenAcc >= 1) {
+          const add = Math.floor(P.ammoRegenAcc);
+          P.ammo = Math.min(P.maxAmmo, P.ammo + add);
+          P.ammoRegenAcc -= add;
+        }
       }
     }
 
