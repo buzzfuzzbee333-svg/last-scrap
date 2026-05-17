@@ -4,15 +4,17 @@ import { ENEMIES, type EnemyKind } from "@/game/data/enemies";
 import { getWaveRule } from "@/game/data/waves";
 import { computeDamage } from "@/game/combat";
 import { resolveRunEnd } from "@/game/resolver";
-import type { Enemy, Player, Rig, RunEndCause, RunEndSummary, Vec2 } from "@/game/types";
+import type { Bullet, Enemy, Player, Rig, RunEndCause, RunEndSummary, Vec2 } from "@/game/types";
 import type { UpgradeId } from "@/game/data/upgrades";
 
 export type RunPhase = "idle" | "spawning" | "fighting" | "cashout" | "ended";
 
 interface InputState {
-  moveX: number; // -1..1
-  moveY: number; // -1..1
-  attack: boolean;
+  moveX: number;
+  moveY: number;
+  firePressed: boolean; // one-shot edge (set on key/button down)
+  fireHeld: boolean;    // continuous while held
+  attack: boolean;      // legacy melee/attack signal (kept for compatibility)
 }
 
 interface RunState {
@@ -20,16 +22,18 @@ interface RunState {
   wave: number;
   unsecured: number;
   scrapMultiplier: number;
+  kills: number;
+  roundTimer: number;
   player: Player;
   rig: Rig;
   enemies: Enemy[];
+  bullets: Bullet[];
   spawnQueue: EnemyKind[];
   spawnTimer: number;
   spawnInterval: number;
   passiveTimer: number;
   input: InputState;
   endSummary: RunEndSummary | null;
-  // actions
   startRun: (upgrades: Partial<Record<UpgradeId, number>>) => void;
   setInput: (i: Partial<InputState>) => void;
   tick: (dt: number) => void;
@@ -37,7 +41,6 @@ interface RunState {
   cashOut: (currentSecured: number) => RunEndSummary;
   surrender: (currentSecured: number) => RunEndSummary;
   forceEnd: (cause: RunEndCause, currentSecured: number) => RunEndSummary;
-  // debug
   debugAddUnsecured: (n: number) => void;
   debugDamagePlayer: (n: number) => void;
   debugDamageRig: (n: number) => void;
@@ -47,6 +50,7 @@ interface RunState {
 }
 
 let enemyIdCounter = 1;
+let bulletIdCounter = 1;
 
 function makePlayer(upgrades: Partial<Record<UpgradeId, number>>): Player {
   const hpLvl = upgrades.maxHp ?? 0;
@@ -65,17 +69,17 @@ function makePlayer(upgrades: Partial<Record<UpgradeId, number>>): Player {
     invulnTimer: 0,
     facing: 0,
     alive: true,
+    ammo: BALANCE.player.maxAmmo,
+    maxAmmo: BALANCE.player.maxAmmo,
+    fireCooldown: 0,
+    holdTime: 0,
   };
 }
 
 function makeRig(upgrades: Partial<Record<UpgradeId, number>>): Rig {
   const lvl = upgrades.rigIntegrity ?? 0;
   const maxHp = BALANCE.rig.baseMaxIntegrity + 60 * lvl;
-  return {
-    pos: { x: BALANCE.arena.rigX, y: BALANCE.arena.rigY },
-    hp: maxHp,
-    maxHp,
-  };
+  return { pos: { x: BALANCE.arena.rigX, y: BALANCE.arena.rigY }, hp: maxHp, maxHp };
 }
 
 function buildSpawnQueue(wave: number): { queue: EnemyKind[]; interval: number } {
@@ -86,7 +90,6 @@ function buildSpawnQueue(wave: number): { queue: EnemyKind[]; interval: number }
     const n = rule.spawns[k] ?? 0;
     for (let i = 0; i < n; i++) queue.push(k);
   });
-  // shuffle
   for (let i = queue.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [queue[i], queue[j]] = [queue[j], queue[i]];
@@ -96,7 +99,6 @@ function buildSpawnQueue(wave: number): { queue: EnemyKind[]; interval: number }
 
 function spawnEnemy(kind: EnemyKind): Enemy {
   const def = ENEMIES[kind];
-  // spawn at random arena edge
   const side = Math.floor(Math.random() * 4);
   const W = BALANCE.arena.width;
   const H = BALANCE.arena.height;
@@ -106,27 +108,40 @@ function spawnEnemy(kind: EnemyKind): Enemy {
   else if (side === 2) pos = { x: Math.random() * W, y: H + 20 };
   else pos = { x: -20, y: Math.random() * H };
   return {
-    id: enemyIdCounter++,
-    kind,
-    pos,
-    hp: def.maxHp,
-    maxHp: def.maxHp,
-    attack: def.attack,
-    defense: def.defense,
-    speed: def.speed,
-    radius: def.radius,
-    aggroRadius: def.aggroRadius,
-    contactInterval: def.contactDamageInterval,
-    contactTimer: 0,
-    scrapReward: def.scrapReward,
-    color: def.color,
+    id: enemyIdCounter++, kind, pos,
+    hp: def.maxHp, maxHp: def.maxHp,
+    attack: def.attack, defense: def.defense, speed: def.speed,
+    radius: def.radius, aggroRadius: def.aggroRadius,
+    contactInterval: def.contactDamageInterval, contactTimer: 0,
+    scrapReward: def.scrapReward, color: def.color,
   };
 }
 
 function dist(a: Vec2, b: Vec2): number {
-  const dx = a.x - b.x;
-  const dy = a.y - b.y;
-  return Math.hypot(dx, dy);
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function nearestEnemy(enemies: Enemy[], p: Vec2): Enemy | null {
+  let best: Enemy | null = null;
+  let bd = Infinity;
+  for (const e of enemies) {
+    const d = dist(e.pos, p);
+    if (d < bd) { bd = d; best = e; }
+  }
+  return best;
+}
+
+function fireBullet(p: Player, mode: "semi" | "auto", facing: number): Bullet {
+  const cfg = BALANCE.gun[mode];
+  return {
+    id: bulletIdCounter++,
+    pos: { x: p.pos.x + Math.cos(facing) * 18, y: p.pos.y + Math.sin(facing) * 18 },
+    vel: { x: Math.cos(facing) * cfg.bulletSpeed, y: Math.sin(facing) * cfg.bulletSpeed },
+    damage: cfg.damage,
+    radius: cfg.bulletRadius,
+    life: BALANCE.gun.bulletLifeSec,
+    color: cfg.color,
+  };
 }
 
 export const useRunStore = create<RunState>((set, get) => ({
@@ -134,14 +149,17 @@ export const useRunStore = create<RunState>((set, get) => ({
   wave: 0,
   unsecured: 0,
   scrapMultiplier: 1,
+  kills: 0,
+  roundTimer: BALANCE.round.durationSec,
   player: makePlayer({}),
   rig: makeRig({}),
   enemies: [],
+  bullets: [],
   spawnQueue: [],
   spawnTimer: 0,
   spawnInterval: 1,
   passiveTimer: 0,
-  input: { moveX: 0, moveY: 0, attack: false },
+  input: { moveX: 0, moveY: 0, firePressed: false, fireHeld: false, attack: false },
   endSummary: null,
 
   startRun: (upgrades) => {
@@ -152,14 +170,17 @@ export const useRunStore = create<RunState>((set, get) => ({
       wave: 1,
       unsecured: 0,
       scrapMultiplier: 1 + 0.15 * scrapLvl,
+      kills: 0,
+      roundTimer: BALANCE.round.durationSec,
       player: makePlayer(upgrades),
       rig: makeRig(upgrades),
       enemies: [],
+      bullets: [],
       spawnQueue: queue,
       spawnTimer: 0,
       spawnInterval: interval,
       passiveTimer: 0,
-      input: { moveX: 0, moveY: 0, attack: false },
+      input: { moveX: 0, moveY: 0, firePressed: false, fireHeld: false, attack: false },
       endSummary: null,
     });
   },
@@ -169,12 +190,17 @@ export const useRunStore = create<RunState>((set, get) => ({
   beginNextWave: () => {
     const nextWave = get().wave + 1;
     const { queue, interval } = buildSpawnQueue(nextWave);
+    const P = { ...get().player };
+    P.ammo = Math.min(P.maxAmmo, P.ammo + BALANCE.player.ammoRefillOnWave);
     set({
       phase: "spawning",
       wave: nextWave,
       spawnQueue: queue,
       spawnTimer: 0,
       spawnInterval: interval,
+      roundTimer: BALANCE.round.durationSec,
+      player: P,
+      bullets: [],
     });
   },
 
@@ -184,14 +210,12 @@ export const useRunStore = create<RunState>((set, get) => ({
     set({ phase: "ended", endSummary: summary });
     return summary;
   },
-
   surrender: (currentSecured) => {
     const s = get();
     const summary = resolveRunEnd("surrender", s.unsecured, currentSecured, s.wave);
     set({ phase: "ended", endSummary: summary });
     return summary;
   },
-
   forceEnd: (cause, currentSecured) => {
     const s = get();
     const summary = resolveRunEnd(cause, s.unsecured, currentSecured, s.wave);
@@ -206,9 +230,11 @@ export const useRunStore = create<RunState>((set, get) => ({
     const P = { ...s.player, pos: { ...s.player.pos } };
     const R = { ...s.rig };
     let enemies = s.enemies.map((e) => ({ ...e, pos: { ...e.pos } }));
+    let bullets = s.bullets.map((b) => ({ ...b, pos: { ...b.pos }, vel: { ...b.vel } }));
     let unsecured = s.unsecured;
+    let kills = s.kills;
 
-    // Player movement
+    // ----- Player movement -----
     const ix = s.input.moveX;
     const iy = s.input.moveY;
     const mag = Math.hypot(ix, iy);
@@ -223,41 +249,60 @@ export const useRunStore = create<RunState>((set, get) => ({
     P.pos.y = Math.max(16, Math.min(BALANCE.arena.height - 16, P.pos.y));
     P.attackCooldown = Math.max(0, P.attackCooldown - dt);
     P.invulnTimer = Math.max(0, P.invulnTimer - dt);
+    P.fireCooldown = Math.max(0, P.fireCooldown - dt);
 
-    // Player attack (auto or pressed)
-    if (P.alive && s.input.attack && P.attackCooldown <= 0) {
-      const range = BALANCE.player.attackRange;
-      const arc = (BALANCE.player.attackArcDeg * Math.PI) / 180;
-      // facing fallback: nearest enemy
-      let facing = P.facing;
-      if (mag <= 0.001) {
-        let nearest: Enemy | null = null;
-        let nd = Infinity;
-        for (const e of enemies) {
-          const d = dist(e.pos, P.pos);
-          if (d < nd) { nd = d; nearest = e; }
-        }
-        if (nearest) facing = Math.atan2(nearest.pos.y - P.pos.y, nearest.pos.x - P.pos.x);
-      }
-      let hitAny = false;
-      for (const e of enemies) {
-        const d = dist(e.pos, P.pos);
-        if (d > range + e.radius) continue;
-        const ang = Math.atan2(e.pos.y - P.pos.y, e.pos.x - P.pos.x);
-        let diff = Math.abs(ang - facing);
-        if (diff > Math.PI) diff = Math.PI * 2 - diff;
-        if (diff <= arc / 2) {
-          e.hp -= computeDamage(P.attack, e.defense);
-          hitAny = true;
-        }
-      }
-      if (hitAny || true) {
-        P.attackCooldown = BALANCE.player.attackCooldown;
-        P.facing = facing;
-      }
+    // ----- Gun firing -----
+    // Determine aim: movement direction, or nearest enemy if standing still.
+    let aim = P.facing;
+    if (mag <= 0.001) {
+      const n = nearestEnemy(enemies, P.pos);
+      if (n) aim = Math.atan2(n.pos.y - P.pos.y, n.pos.x - P.pos.x);
     }
 
-    // Enemy AI + contact damage
+    // Semi: instant shot on press edge.
+    if (P.alive && s.input.firePressed && P.fireCooldown <= 0 && P.ammo >= BALANCE.gun.semi.ammoCost) {
+      bullets.push(fireBullet(P, "semi", aim));
+      P.ammo -= BALANCE.gun.semi.ammoCost;
+      P.fireCooldown = BALANCE.gun.semi.cooldown;
+      P.facing = aim;
+    }
+
+    // Track hold time. If still held past threshold, auto-fire at auto cadence.
+    if (s.input.fireHeld) {
+      P.holdTime += dt;
+      if (P.alive && P.holdTime >= BALANCE.gun.holdToAutoSec && P.fireCooldown <= 0 && P.ammo >= BALANCE.gun.auto.ammoCost) {
+        bullets.push(fireBullet(P, "auto", aim));
+        P.ammo -= BALANCE.gun.auto.ammoCost;
+        P.fireCooldown = BALANCE.gun.auto.cooldown;
+        P.facing = aim;
+      }
+    } else {
+      P.holdTime = 0;
+    }
+
+    // ----- Bullet update + collisions -----
+    const liveBullets: Bullet[] = [];
+    for (const b of bullets) {
+      b.pos.x += b.vel.x * dt;
+      b.pos.y += b.vel.y * dt;
+      b.life -= dt;
+      if (b.life <= 0 || b.pos.x < -20 || b.pos.x > BALANCE.arena.width + 20 || b.pos.y < -20 || b.pos.y > BALANCE.arena.height + 20) {
+        continue;
+      }
+      let hit = false;
+      for (const e of enemies) {
+        if (e.hp <= 0) continue;
+        if (dist(e.pos, b.pos) <= e.radius + b.radius) {
+          e.hp -= computeDamage(b.damage, e.defense);
+          hit = true;
+          break;
+        }
+      }
+      if (!hit) liveBullets.push(b);
+    }
+    bullets = liveBullets;
+
+    // ----- Enemy AI + contact damage -----
     for (const e of enemies) {
       const toPlayer = dist(e.pos, P.pos);
       const target: Vec2 = (P.alive && toPlayer <= e.aggroRadius) ? P.pos : R.pos;
@@ -268,37 +313,32 @@ export const useRunStore = create<RunState>((set, get) => ({
       e.pos.y += (dy / m) * e.speed * dt;
       e.contactTimer = Math.max(0, e.contactTimer - dt);
 
-      // contact with rig
       const dRig = dist(e.pos, R.pos);
-      if (dRig <= e.radius + BALANCE.arena.rigRadius) {
-        if (e.contactTimer <= 0) {
-          R.hp -= computeDamage(e.attack, 0);
-          e.contactTimer = e.contactInterval;
-        }
+      if (dRig <= e.radius + BALANCE.arena.rigRadius && e.contactTimer <= 0) {
+        R.hp -= computeDamage(e.attack, 0);
+        e.contactTimer = e.contactInterval;
       }
-      // contact with player
       const dPl = dist(e.pos, P.pos);
-      if (P.alive && dPl <= e.radius + 16) {
-        if (e.contactTimer <= 0 && P.invulnTimer <= 0) {
-          P.hp -= computeDamage(e.attack, P.defense);
-          P.invulnTimer = BALANCE.player.invulnAfterHit;
-          e.contactTimer = e.contactInterval;
-        }
+      if (P.alive && dPl <= e.radius + 16 && e.contactTimer <= 0 && P.invulnTimer <= 0) {
+        P.hp -= computeDamage(e.attack, P.defense);
+        P.invulnTimer = BALANCE.player.invulnAfterHit;
+        e.contactTimer = e.contactInterval;
       }
     }
 
-    // Remove dead enemies, award scrap
+    // Remove dead, award scrap + kills
     const survivors: Enemy[] = [];
     for (const e of enemies) {
       if (e.hp <= 0) {
         unsecured += Math.round(e.scrapReward * s.scrapMultiplier);
+        kills += 1;
       } else {
         survivors.push(e);
       }
     }
     enemies = survivors;
 
-    // Spawning
+    // ----- Spawning -----
     let spawnQueue = s.spawnQueue;
     let spawnTimer = s.spawnTimer - dt;
     if (s.phase === "spawning") {
@@ -309,7 +349,7 @@ export const useRunStore = create<RunState>((set, get) => ({
       }
     }
 
-    // Passive rig scrap
+    // ----- Passive rig scrap -----
     let passiveTimer = s.passiveTimer + dt;
     if (R.hp > 0) {
       while (passiveTimer >= 1) {
@@ -318,75 +358,67 @@ export const useRunStore = create<RunState>((set, get) => ({
       }
     }
 
-    // Check player death
+    // ----- Round timer -----
+    const roundTimer = Math.max(0, s.roundTimer - dt);
+
+    // Player death
     if (P.alive && P.hp <= 0) {
-      P.hp = 0;
-      P.alive = false;
+      P.hp = 0; P.alive = false;
       const summary = resolveRunEnd("death", unsecured, 0, s.wave);
-      // currentSecured updated in finalize step
       set({
-        player: P, rig: R, enemies, spawnQueue, spawnTimer,
-        unsecured, passiveTimer, phase: "ended",
-        endSummary: { ...summary, securedAfter: -1 },
+        player: P, rig: R, enemies, bullets, spawnQueue, spawnTimer,
+        unsecured, kills, passiveTimer, roundTimer,
+        phase: "ended", endSummary: { ...summary, securedAfter: -1 },
       });
       return;
     }
 
-    // Check rig overrun
+    // Rig overrun
     if (R.hp <= 0) {
       R.hp = 0;
       const summary = resolveRunEnd("overrun", unsecured, 0, s.wave);
       set({
-        player: P, rig: R, enemies, spawnQueue, spawnTimer,
-        unsecured, passiveTimer, phase: "ended",
-        endSummary: { ...summary, securedAfter: -1 },
+        player: P, rig: R, enemies, bullets, spawnQueue, spawnTimer,
+        unsecured, kills, passiveTimer, roundTimer,
+        phase: "ended", endSummary: { ...summary, securedAfter: -1 },
       });
       return;
     }
 
-    // Determine phase transitions
+    // Phase transitions
     let phase: RunPhase = s.phase;
-    if (phase === "spawning" && spawnQueue.length === 0) {
-      phase = "fighting";
-    }
-    if (phase === "fighting" && enemies.length === 0 && spawnQueue.length === 0) {
-      // wave clear
+    const allCleared = enemies.length === 0 && spawnQueue.length === 0;
+    const timeout = roundTimer <= 0;
+    if (phase === "spawning" && spawnQueue.length === 0) phase = "fighting";
+    if (phase === "fighting" && (allCleared || timeout)) {
       const bonus = BALANCE.waveClearBonus(s.wave);
       unsecured += Math.round(bonus * s.scrapMultiplier);
       phase = "cashout";
     }
 
     set({
-      player: P, rig: R, enemies, spawnQueue, spawnTimer,
-      unsecured, passiveTimer, phase,
+      player: P, rig: R, enemies, bullets, spawnQueue, spawnTimer,
+      unsecured, kills, passiveTimer, roundTimer, phase,
     });
   },
 
-  // ---- debug ----
+  // debug
   debugAddUnsecured: (n) => set({ unsecured: get().unsecured + n }),
-  debugDamagePlayer: (n) => {
-    const P = { ...get().player };
-    P.hp = Math.max(0, P.hp - n);
-    set({ player: P });
-  },
-  debugDamageRig: (n) => {
-    const R = { ...get().rig };
-    R.hp = Math.max(0, R.hp - n);
-    set({ rig: R });
-  },
+  debugDamagePlayer: (n) => { const P = { ...get().player }; P.hp = Math.max(0, P.hp - n); set({ player: P }); },
+  debugDamageRig: (n) => { const R = { ...get().rig }; R.hp = Math.max(0, R.hp - n); set({ rig: R }); },
   debugKillEnemies: () => {
     const s = get();
-    let unsecured = s.unsecured;
-    for (const e of s.enemies) unsecured += Math.round(e.scrapReward * s.scrapMultiplier);
-    set({ enemies: [], unsecured });
+    let unsecured = s.unsecured; let kills = s.kills;
+    for (const e of s.enemies) { unsecured += Math.round(e.scrapReward * s.scrapMultiplier); kills += 1; }
+    set({ enemies: [], unsecured, kills });
   },
   debugForceWaveClear: () => {
     const s = get();
-    let unsecured = s.unsecured;
-    for (const e of s.enemies) unsecured += Math.round(e.scrapReward * s.scrapMultiplier);
+    let unsecured = s.unsecured; let kills = s.kills;
+    for (const e of s.enemies) { unsecured += Math.round(e.scrapReward * s.scrapMultiplier); kills += 1; }
     const bonus = BALANCE.waveClearBonus(s.wave);
     unsecured += Math.round(bonus * s.scrapMultiplier);
-    set({ enemies: [], spawnQueue: [], unsecured, phase: "cashout" });
+    set({ enemies: [], spawnQueue: [], unsecured, kills, phase: "cashout" });
   },
   debugSetWave: (w) => set({ wave: Math.max(1, w) }),
 }));
