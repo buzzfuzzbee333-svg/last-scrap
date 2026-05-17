@@ -349,11 +349,12 @@ export const useRunStore = create<RunState>((set, get) => ({
       }
     }
 
-    // Remove dead, award scrap + kills
+    // Remove dead, award scrap + kills (scaled by gamble multiplier)
+    const rewardMult = s.scrapMultiplier * s.gambleMult;
     const survivors: Enemy[] = [];
     for (const e of enemies) {
       if (e.hp <= 0) {
-        unsecured += Math.round(e.scrapReward * s.scrapMultiplier);
+        unsecured += Math.round(e.scrapReward * rewardMult);
         kills += 1;
       } else {
         survivors.push(e);
@@ -376,7 +377,7 @@ export const useRunStore = create<RunState>((set, get) => ({
     let passiveTimer = s.passiveTimer + dt;
     if (R.hp > 0) {
       while (passiveTimer >= 1) {
-        unsecured += Math.round(BALANCE.rig.passiveScrapPerSec * s.scrapMultiplier);
+        unsecured += Math.round(BALANCE.rig.passiveScrapPerSec * rewardMult);
         passiveTimer -= 1;
       }
     }
@@ -387,11 +388,14 @@ export const useRunStore = create<RunState>((set, get) => ({
     // Player death
     if (P.alive && P.hp <= 0) {
       P.hp = 0; P.alive = false;
-      const summary = resolveRunEnd("death", unsecured, 0, s.wave);
+      const busted = s.gambleMult > 1;
+      const effUnsecured = busted ? Math.round(unsecured * (1 - s.gamblePenalty)) : unsecured;
+      const summary = resolveRunEnd("death", effUnsecured, 0, s.wave);
       set({
         player: P, rig: R, enemies, bullets, spawnQueue, spawnTimer,
-        unsecured, kills, passiveTimer, roundTimer,
-        phase: "ended", endSummary: { ...summary, securedAfter: -1 },
+        unsecured: effUnsecured, kills, passiveTimer, roundTimer,
+        phase: "ended",
+        endSummary: { ...summary, gambleBusted: busted, gambleMult: s.gambleMult },
       });
       return;
     }
@@ -399,11 +403,14 @@ export const useRunStore = create<RunState>((set, get) => ({
     // Rig overrun
     if (R.hp <= 0) {
       R.hp = 0;
-      const summary = resolveRunEnd("overrun", unsecured, 0, s.wave);
+      const busted = s.gambleMult > 1;
+      const effUnsecured = busted ? Math.round(unsecured * (1 - s.gamblePenalty)) : unsecured;
+      const summary = resolveRunEnd("overrun", effUnsecured, 0, s.wave);
       set({
         player: P, rig: R, enemies, bullets, spawnQueue, spawnTimer,
-        unsecured, kills, passiveTimer, roundTimer,
-        phase: "ended", endSummary: { ...summary, securedAfter: -1 },
+        unsecured: effUnsecured, kills, passiveTimer, roundTimer,
+        phase: "ended",
+        endSummary: { ...summary, gambleBusted: busted, gambleMult: s.gambleMult },
       });
       return;
     }
@@ -415,7 +422,7 @@ export const useRunStore = create<RunState>((set, get) => ({
     if (phase === "spawning" && spawnQueue.length === 0) phase = "fighting";
     if (phase === "fighting" && (allCleared || timeout)) {
       const bonus = BALANCE.waveClearBonus(s.wave);
-      unsecured += Math.round(bonus * s.scrapMultiplier);
+      unsecured += Math.round(bonus * rewardMult);
       phase = "cashout";
     }
 
