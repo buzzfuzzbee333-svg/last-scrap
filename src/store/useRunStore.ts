@@ -285,6 +285,8 @@ export const useRunStore = create<RunState>((set, get) => ({
     P.attackCooldown = Math.max(0, P.attackCooldown - dt);
     P.invulnTimer = Math.max(0, P.invulnTimer - dt);
     P.fireCooldown = Math.max(0, P.fireCooldown - dt);
+    P.meleeCooldown = Math.max(0, P.meleeCooldown - dt);
+    P.hitRecentTimer = Math.max(0, P.hitRecentTimer - dt);
 
     // ----- Gun firing -----
     // Determine aim: movement direction, or nearest enemy if standing still.
@@ -294,22 +296,54 @@ export const useRunStore = create<RunState>((set, get) => ({
       if (n) aim = Math.atan2(n.pos.y - P.pos.y, n.pos.x - P.pos.x);
     }
 
-    // Semi: instant shot on press edge.
-    if (P.alive && s.input.firePressed && P.fireCooldown <= 0 && P.ammo >= BALANCE.gun.semi.ammoCost) {
-      bullets.push(fireBullet(P, "semi", aim));
-      P.ammo -= BALANCE.gun.semi.ammoCost;
-      P.fireCooldown = BALANCE.gun.semi.cooldown;
+    // Melee fallback (ammo depleted): swing on tap, hits enemies in arc in front.
+    const doMelee = (): void => {
+      if (!P.alive || P.meleeCooldown > 0) return;
+      const dmg = BALANCE.melee.baseDamage + P.meleeBonus;
+      const range = BALANCE.melee.range;
+      const halfArc = (BALANCE.melee.arcDeg * Math.PI) / 360;
+      for (const e of enemies) {
+        if (e.hp <= 0) continue;
+        const dx = e.pos.x - P.pos.x;
+        const dy = e.pos.y - P.pos.y;
+        const d = Math.hypot(dx, dy);
+        if (d > range + e.radius) continue;
+        const ang = Math.atan2(dy, dx);
+        let diff = Math.abs(((ang - aim + Math.PI) % (Math.PI * 2)) - Math.PI);
+        if (diff <= halfArc) e.hp -= computeDamage(dmg, e.defense);
+      }
+      P.meleeCooldown = BALANCE.melee.cooldown;
       P.facing = aim;
+    };
+
+    // Semi: instant shot on press edge. If no ammo, fall back to melee swing.
+    if (P.alive && s.input.firePressed && P.fireCooldown <= 0) {
+      if (P.ammo >= BALANCE.gun.semi.ammoCost) {
+        const b = fireBullet(P, "semi", aim);
+        b.damage += P.weaponBonus;
+        bullets.push(b);
+        P.ammo -= BALANCE.gun.semi.ammoCost;
+        P.fireCooldown = BALANCE.gun.semi.cooldown;
+        P.facing = aim;
+      } else {
+        doMelee();
+      }
     }
 
     // Track hold time. If still held past threshold, auto-fire at auto cadence.
     if (s.input.fireHeld) {
       P.holdTime += dt;
-      if (P.alive && P.holdTime >= BALANCE.gun.holdToAutoSec && P.fireCooldown <= 0 && P.ammo >= BALANCE.gun.auto.ammoCost) {
-        bullets.push(fireBullet(P, "auto", aim));
-        P.ammo -= BALANCE.gun.auto.ammoCost;
-        P.fireCooldown = BALANCE.gun.auto.cooldown;
-        P.facing = aim;
+      if (P.alive && P.holdTime >= BALANCE.gun.holdToAutoSec && P.fireCooldown <= 0) {
+        if (P.ammo >= BALANCE.gun.auto.ammoCost) {
+          const b = fireBullet(P, "auto", aim);
+          b.damage += P.weaponBonus;
+          bullets.push(b);
+          P.ammo -= BALANCE.gun.auto.ammoCost;
+          P.fireCooldown = BALANCE.gun.auto.cooldown;
+          P.facing = aim;
+        } else if (P.meleeCooldown <= 0) {
+          doMelee();
+        }
       }
     } else {
       P.holdTime = 0;
