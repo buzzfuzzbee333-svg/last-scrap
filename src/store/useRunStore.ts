@@ -60,7 +60,12 @@ function makePlayer(upgrades: Partial<Record<UpgradeId, number>>): Player {
   const atkLvl = upgrades.attack ?? 0;
   const defLvl = upgrades.defense ?? 0;
   const spdLvl = upgrades.speed ?? 0;
+  const ammoLvl = upgrades.startAmmo ?? 0;
+  const wpnLvl = upgrades.weaponDamage ?? 0;
+  const meleeLvl = upgrades.melee ?? 0;
+  const regenLvl = upgrades.regenRate ?? 0;
   const maxHp = BALANCE.player.baseMaxHp + 15 * hpLvl;
+  const maxAmmo = BALANCE.player.maxAmmo + 10 * ammoLvl;
   return {
     pos: { x: BALANCE.arena.width / 2, y: BALANCE.arena.height / 2 + 90 },
     hp: maxHp,
@@ -72,10 +77,17 @@ function makePlayer(upgrades: Partial<Record<UpgradeId, number>>): Player {
     invulnTimer: 0,
     facing: 0,
     alive: true,
-    ammo: BALANCE.player.maxAmmo,
-    maxAmmo: BALANCE.player.maxAmmo,
+    ammo: maxAmmo,
+    maxAmmo,
     fireCooldown: 0,
     holdTime: 0,
+    weaponBonus: 3 * wpnLvl,
+    meleeBonus: 5 * meleeLvl,
+    meleeCooldown: 0,
+    regenMult: 1 + 0.25 * regenLvl,
+    hpRegenAcc: 0,
+    ammoRegenAcc: 0,
+    hitRecentTimer: 0,
   };
 }
 
