@@ -154,6 +154,8 @@ export const useRunStore = create<RunState>((set, get) => ({
   scrapMultiplier: 1,
   kills: 0,
   roundTimer: BALANCE.round.durationSec,
+  gambleMult: 1,
+  gamblePenalty: 0,
   player: makePlayer({}),
   rig: makeRig({}),
   enemies: [],
@@ -175,6 +177,8 @@ export const useRunStore = create<RunState>((set, get) => ({
       scrapMultiplier: 1 + 0.15 * scrapLvl,
       kills: 0,
       roundTimer: BALANCE.round.durationSec,
+      gambleMult: 1,
+      gamblePenalty: 0,
       player: makePlayer(upgrades),
       rig: makeRig(upgrades),
       enemies: [],
@@ -190,9 +194,17 @@ export const useRunStore = create<RunState>((set, get) => ({
 
   setInput: (i) => set({ input: { ...get().input, ...i } }),
 
-  beginNextWave: () => {
+  beginNextWave: (gambleMult = 1, gamblePenalty = 0) => {
     const nextWave = get().wave + 1;
-    const { queue, interval } = buildSpawnQueue(nextWave);
+    const { queue: baseQueue, interval } = buildSpawnQueue(nextWave);
+    const queue: EnemyKind[] = [];
+    const repeats = Math.max(1, Math.round(gambleMult));
+    for (let r = 0; r < repeats; r++) queue.push(...baseQueue);
+    for (let i = queue.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [queue[i], queue[j]] = [queue[j], queue[i]];
+    }
+    const scaledInterval = Math.max(0.25, interval / Math.max(1, gambleMult * 0.85));
     const P = { ...get().player };
     P.ammo = Math.min(P.maxAmmo, P.ammo + BALANCE.player.ammoRefillOnWave);
     set({
@@ -200,10 +212,12 @@ export const useRunStore = create<RunState>((set, get) => ({
       wave: nextWave,
       spawnQueue: queue,
       spawnTimer: 0,
-      spawnInterval: interval,
+      spawnInterval: scaledInterval,
       roundTimer: BALANCE.round.durationSec,
       player: P,
       bullets: [],
+      gambleMult,
+      gamblePenalty,
     });
   },
 
@@ -224,6 +238,12 @@ export const useRunStore = create<RunState>((set, get) => ({
     const summary = resolveRunEnd(cause, s.unsecured, currentSecured, s.wave);
     set({ phase: "ended", endSummary: summary });
     return summary;
+  },
+
+  markSummaryPersisted: (securedAfter) => {
+    const sum = get().endSummary;
+    if (!sum || sum.persisted) return;
+    set({ endSummary: { ...sum, securedAfter, persisted: true } });
   },
 
   tick: (dt) => {
