@@ -51,4 +51,13 @@ export const BALANCE = {
     surrender: { bank: 0.4, lose: 0.6 },
   },
   waveClearBonus: (wave: number) => 15 + wave * 5,
+  // Gamble: pick a multiplier before the next wave. Rewards and difficulty both scale.
+  // If you fail (death/overrun) while gambling, you lose `penalty` % of all unsecured scrap.
+  gamble: {
+    options: [
+      { mult: 2, penalty: 0.5,  label: "2x" },
+      { mult: 3, penalty: 0.7,  label: "3x" },
+      { mult: 5, penalty: 0.85, label: "5x" },
+    ] as const,
+  },
 };
