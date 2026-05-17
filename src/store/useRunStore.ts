@@ -372,11 +372,11 @@ export const useRunStore = create<RunState>((set, get) => ({
     bullets = liveBullets;
 
     // ----- Enemy AI + contact damage -----
+    // Priority target is ALWAYS the rig. Enemies only "attack" the hero by
+    // physical proximity (they walk past toward the rig and brush the player).
     for (const e of enemies) {
-      const toPlayer = dist(e.pos, P.pos);
-      const target: Vec2 = (P.alive && toPlayer <= e.aggroRadius) ? P.pos : R.pos;
-      const dx = target.x - e.pos.x;
-      const dy = target.y - e.pos.y;
+      const dx = R.pos.x - e.pos.x;
+      const dy = R.pos.y - e.pos.y;
       const m = Math.hypot(dx, dy) || 1;
       e.pos.x += (dx / m) * e.speed * dt;
       e.pos.y += (dy / m) * e.speed * dt;
@@ -391,6 +391,7 @@ export const useRunStore = create<RunState>((set, get) => ({
       if (P.alive && dPl <= e.radius + 16 && e.contactTimer <= 0 && P.invulnTimer <= 0) {
         P.hp -= computeDamage(e.attack, P.defense);
         P.invulnTimer = BALANCE.player.invulnAfterHit;
+        P.hitRecentTimer = BALANCE.regen.delayAfterHitSec;
         e.contactTimer = e.contactInterval;
       }
     }
