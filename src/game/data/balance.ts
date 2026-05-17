@@ -11,6 +11,33 @@ export const BALANCE = {
     attackCooldown: 0.35, // sec
     radius: 16,
     invulnAfterHit: 0.25,
+    maxAmmo: 60,
+    ammoRefillOnWave: 30,
+  },
+  gun: {
+    // Semi-auto: triggered by a tap (key/button press edge). Stronger, slower.
+    semi: {
+      damage: 28,
+      cooldown: 0.32,
+      ammoCost: 1,
+      bulletSpeed: 900,
+      bulletRadius: 4,
+      color: "#ffd84a",
+    },
+    // Full-auto: triggered by holding the fire button beyond a short delay. Weaker, faster.
+    auto: {
+      damage: 12,
+      cooldown: 0.09,
+      ammoCost: 1,
+      bulletSpeed: 780,
+      bulletRadius: 3,
+      color: "#ff8a3a",
+    },
+    holdToAutoSec: 0.18, // hold duration before full-auto kicks in
+    bulletLifeSec: 0.9,
+  },
+  round: {
+    durationSec: 60, // time limit per wave; on timeout, wave ends and cashout opens
   },
   rig: {
     baseMaxIntegrity: 300,

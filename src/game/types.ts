@@ -13,6 +13,20 @@ export interface Player {
   invulnTimer: number;
   facing: number; // radians
   alive: boolean;
+  ammo: number;
+  maxAmmo: number;
+  fireCooldown: number; // shared gun cooldown
+  holdTime: number;     // how long fire has been held this press
+}
+
+export interface Bullet {
+  id: number;
+  pos: Vec2;
+  vel: Vec2;
+  damage: number;
+  radius: number;
+  life: number;
+  color: string;
 }
 
 export interface Rig {
