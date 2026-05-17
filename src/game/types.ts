@@ -61,4 +61,7 @@ export interface RunEndSummary {
   lost: number;
   securedAfter: number;
   waveReached: number;
+  gambleBusted?: boolean;
+  gambleMult?: number;
+  persisted?: boolean; // set true after meta store has banked it
 }
