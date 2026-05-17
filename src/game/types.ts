@@ -17,6 +17,13 @@ export interface Player {
   maxAmmo: number;
   fireCooldown: number; // shared gun cooldown
   holdTime: number;     // how long fire has been held this press
+  weaponBonus: number;  // +damage added to bullets (from upgrades)
+  meleeBonus: number;   // +damage added to melee fallback (from upgrades)
+  meleeCooldown: number;
+  regenMult: number;    // upgrade multiplier on regen rate (1 = base)
+  hpRegenAcc: number;   // fractional HP carry
+  ammoRegenAcc: number; // fractional ammo carry
+  hitRecentTimer: number; // pauses HP regen briefly after damage
 }
 
 export interface Bullet {
