@@ -219,7 +219,7 @@ export const useRunStore = create<RunState>((set, get) => ({
       P.pos.y += ny * P.speed * dt;
       P.facing = Math.atan2(ny, nx);
     }
-    P.pos.x = Math.max(P.radius ?? 16, Math.min(BALANCE.arena.width - 16, P.pos.x));
+    P.pos.x = Math.max(16, Math.min(BALANCE.arena.width - 16, P.pos.x));
     P.pos.y = Math.max(16, Math.min(BALANCE.arena.height - 16, P.pos.y));
     P.attackCooldown = Math.max(0, P.attackCooldown - dt);
     P.invulnTimer = Math.max(0, P.invulnTimer - dt);
