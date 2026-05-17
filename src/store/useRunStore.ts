@@ -24,6 +24,8 @@ interface RunState {
   scrapMultiplier: number;
   kills: number;
   roundTimer: number;
+  gambleMult: number;     // active multiplier for current wave (1 = no gamble)
+  gamblePenalty: number;  // % of unsecured lost if this wave fails (0 if no gamble)
   player: Player;
   rig: Rig;
   enemies: Enemy[];
@@ -37,10 +39,11 @@ interface RunState {
   startRun: (upgrades: Partial<Record<UpgradeId, number>>) => void;
   setInput: (i: Partial<InputState>) => void;
   tick: (dt: number) => void;
-  beginNextWave: () => void;
+  beginNextWave: (gambleMult?: number, gamblePenalty?: number) => void;
   cashOut: (currentSecured: number) => RunEndSummary;
   surrender: (currentSecured: number) => RunEndSummary;
   forceEnd: (cause: RunEndCause, currentSecured: number) => RunEndSummary;
+  markSummaryPersisted: (securedAfter: number) => void;
   debugAddUnsecured: (n: number) => void;
   debugDamagePlayer: (n: number) => void;
   debugDamageRig: (n: number) => void;
