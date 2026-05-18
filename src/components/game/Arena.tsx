@@ -1,6 +1,22 @@
 import { useEffect, useRef } from "react";
 import { useRunStore } from "@/store/useRunStore";
 import { BALANCE } from "@/game/data/balance";
+import arenaUrl from "@/assets/game/arena.png";
+import heroUrl from "@/assets/game/hero.png";
+import bruteUrl from "@/assets/game/brute.png";
+import shamblerUrl from "@/assets/game/shambler.png";
+
+const loadImg = (src: string): HTMLImageElement => {
+  const i = new Image();
+  i.src = src;
+  return i;
+};
+const IMG = {
+  arena: loadImg(arenaUrl),
+  hero: loadImg(heroUrl),
+  brute: loadImg(bruteUrl),
+  shambler: loadImg(shamblerUrl),
+};
 
 const MOVE_KEYS: Record<string, [string, number]> = {
   w: ["y", -1], ArrowUp: ["y", -1],
