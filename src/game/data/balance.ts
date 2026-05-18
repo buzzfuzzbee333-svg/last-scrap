@@ -1,6 +1,6 @@
 // Central tuning. Edit numbers here.
 export const BALANCE = {
-  arena: { width: 1280, height: 720, rigRadius: 48, rigX: 640, rigY: 360 },
+  arena: { width: 720, height: 720, rigRadius: 44, rigX: 360, rigY: 360 },
   player: {
     baseMaxHp: 100,
     baseAttack: 20,

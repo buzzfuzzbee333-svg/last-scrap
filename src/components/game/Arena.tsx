@@ -142,7 +142,7 @@ export function Arena() {
       ref={canvasRef}
       width={BALANCE.arena.width}
       height={BALANCE.arena.height}
-      style={{ width: "100%", height: "auto", maxHeight: "100vh", display: "block", background: "#1a1614", touchAction: "none" }}
+      style={{ width: "100%", height: "auto", aspectRatio: "1 / 1", display: "block", background: "#1a1614", touchAction: "none" }}
     />
   );
 }
