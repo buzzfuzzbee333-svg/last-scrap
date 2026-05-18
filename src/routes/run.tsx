@@ -51,18 +51,19 @@ function RunPage() {
   }, [phase, endSummary, addSecured, markSummaryPersisted]);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-black">
+    <div className="relative flex min-h-screen flex-col bg-black">
       <HUD />
-      <Arena />
-      <MobileControls />
+      <div className="relative mx-auto w-full max-w-[min(100vw,90vh)]">
+        <Arena />
+        <MobileControls />
+        <button
+          className="absolute right-2 bottom-2 z-10 rounded bg-black/60 px-3 py-1.5 text-xs text-white/70 hover:bg-black/80"
+          onClick={() => surrender(secured)}
+        >
+          Surrender
+        </button>
+      </div>
       <DebugPanel />
-
-      <button
-        className="absolute right-2 bottom-2 z-10 rounded bg-black/60 px-3 py-1.5 text-xs text-white/70 hover:bg-black/80"
-        onClick={() => surrender(secured)}
-      >
-        Surrender
-      </button>
 
       {phase === "cashout" && (
         <CashoutModal

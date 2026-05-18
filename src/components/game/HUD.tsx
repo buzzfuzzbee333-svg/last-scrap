@@ -14,7 +14,7 @@ export function HUD() {
   const ss = Math.floor(roundTimer % 60).toString().padStart(2, "0");
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-2 p-3 text-sm font-medium text-white">
+    <div className="flex flex-col gap-2 border-b border-white/10 bg-stone-950 p-2 text-xs font-medium text-white sm:text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="rounded bg-black/70 px-3 py-1.5">
           Wave <span className="font-bold text-amber-300">{wave}</span>
