@@ -79,12 +79,14 @@ export function Arena() {
       const W = BALANCE.arena.width;
       const H = BALANCE.arena.height;
 
-      ctx.fillStyle = "#1a1614";
-      ctx.fillRect(0, 0, W, H);
-      ctx.strokeStyle = "#2a221e";
-      ctx.lineWidth = 1;
-      for (let x = 0; x < W; x += 64) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-      for (let y = 0; y < H; y += 64) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+      // arena background (stretched to fill logical world)
+      if (IMG.arena.complete && IMG.arena.naturalWidth > 0) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(IMG.arena, 0, 0, W, H);
+      } else {
+        ctx.fillStyle = "#1a1614";
+        ctx.fillRect(0, 0, W, H);
+      }
 
       // rig
       const rig = s.rig;
@@ -97,14 +99,27 @@ export function Arena() {
       ctx.font = "bold 18px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText("RIG", rig.pos.x, rig.pos.y);
 
-      // enemies
+      // enemies as sprites
+      ctx.imageSmoothingEnabled = false;
       for (const e of s.enemies) {
-        ctx.fillStyle = e.color;
-        ctx.beginPath(); ctx.arc(e.pos.x, e.pos.y, e.radius, 0, Math.PI * 2); ctx.fill();
+        const img = e.kind === "brute" ? IMG.brute : IMG.shambler;
+        const size = e.radius * 2.4;
+        if (img.complete && img.naturalWidth > 0) {
+          // face toward rig horizontally
+          const flip = e.pos.x > rig.pos.x ? -1 : 1;
+          ctx.save();
+          ctx.translate(e.pos.x, e.pos.y);
+          ctx.scale(flip, 1);
+          ctx.drawImage(img, -size / 2, -size / 2, size, size);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = e.color;
+          ctx.beginPath(); ctx.arc(e.pos.x, e.pos.y, e.radius, 0, Math.PI * 2); ctx.fill();
+        }
         const w = e.radius * 2;
         const pct = e.hp / e.maxHp;
-        ctx.fillStyle = "#000"; ctx.fillRect(e.pos.x - w / 2, e.pos.y - e.radius - 8, w, 3);
-        ctx.fillStyle = "#73ffb8"; ctx.fillRect(e.pos.x - w / 2, e.pos.y - e.radius - 8, w * pct, 3);
+        ctx.fillStyle = "#000"; ctx.fillRect(e.pos.x - w / 2, e.pos.y - e.radius - 10, w, 3);
+        ctx.fillStyle = "#73ffb8"; ctx.fillRect(e.pos.x - w / 2, e.pos.y - e.radius - 10, w * pct, 3);
       }
 
       // bullets
@@ -113,15 +128,27 @@ export function Arena() {
         ctx.beginPath(); ctx.arc(b.pos.x, b.pos.y, b.radius, 0, Math.PI * 2); ctx.fill();
       }
 
-      // player
+      // player sprite, rotated to facing
       const P = s.player;
-      ctx.fillStyle = P.alive ? (P.invulnTimer > 0 ? "#ffd84a" : "#e8edf3") : "#555";
-      ctx.beginPath(); ctx.arc(P.pos.x, P.pos.y, 16, 0, Math.PI * 2); ctx.fill();
-      // gun barrel facing indicator
-      ctx.strokeStyle = "#1a1614"; ctx.lineWidth = 4;
+      const pSize = 44;
+      if (IMG.hero.complete && IMG.hero.naturalWidth > 0) {
+        ctx.save();
+        ctx.translate(P.pos.x, P.pos.y);
+        // sprite is drawn facing down; rotate so "down" aligns with facing angle
+        ctx.rotate(P.facing - Math.PI / 2);
+        if (P.invulnTimer > 0) ctx.globalAlpha = 0.6;
+        if (!P.alive) ctx.globalAlpha = 0.3;
+        ctx.drawImage(IMG.hero, -pSize / 2, -pSize / 2, pSize, pSize);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = P.alive ? "#e8edf3" : "#555";
+        ctx.beginPath(); ctx.arc(P.pos.x, P.pos.y, 16, 0, Math.PI * 2); ctx.fill();
+      }
+      // muzzle indicator
+      ctx.strokeStyle = "#ffd84a"; ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(P.pos.x, P.pos.y);
-      ctx.lineTo(P.pos.x + Math.cos(P.facing) * 24, P.pos.y + Math.sin(P.facing) * 24);
+      ctx.moveTo(P.pos.x + Math.cos(P.facing) * 18, P.pos.y + Math.sin(P.facing) * 18);
+      ctx.lineTo(P.pos.x + Math.cos(P.facing) * 28, P.pos.y + Math.sin(P.facing) * 28);
       ctx.stroke();
     };
 
