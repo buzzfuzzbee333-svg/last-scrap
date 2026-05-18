@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { loadMeta, saveMeta } from "@/game/persistence";
+import { loadMeta, saveMeta, type MetaPersisted } from "@/game/persistence";
 import { UPGRADES, upgradeCost, type UpgradeId } from "@/game/data/upgrades";
 
 interface MetaState {
@@ -11,6 +11,7 @@ interface MetaState {
   setSecured: (n: number) => void;
   buyUpgrade: (id: UpgradeId) => boolean;
   reset: () => void;
+  loadFromData: (data: MetaPersisted) => void;
 }
 
 export const useMetaStore = create<MetaState>((set, get) => ({
@@ -47,6 +48,9 @@ export const useMetaStore = create<MetaState>((set, get) => ({
   reset: () => {
     set({ securedScrap: 0, upgrades: {} });
     saveMeta({ securedScrap: 0, upgrades: {} });
+  },
+  loadFromData: (data) => {
+    set({ securedScrap: data.securedScrap, upgrades: data.upgrades, hydrated: true });
   },
 }));
 
