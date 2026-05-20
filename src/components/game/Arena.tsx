@@ -131,7 +131,7 @@ export function Arena() {
 
       // player sprite, rotated to facing
       const P = s.player;
-      const pSize = 44;
+      const pSize = BALANCE.render.sprites.hero;
       if (IMG.hero.complete && IMG.hero.naturalWidth > 0) {
         ctx.save();
         ctx.translate(P.pos.x, P.pos.y);
