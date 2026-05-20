@@ -186,7 +186,15 @@ export function Arena() {
       ref={canvasRef}
       width={BALANCE.arena.width}
       height={BALANCE.arena.height}
-      style={{ width: "100%", height: "auto", aspectRatio: "1 / 1", display: "block", background: "#1a1614", touchAction: "none" }}
+      style={{
+        width: "100%",
+        height: "auto",
+        aspectRatio: `${BALANCE.arena.width} / ${BALANCE.arena.height}`,
+        display: "block",
+        background: "#1a1614",
+        touchAction: "none",
+        imageRendering: BALANCE.render.pixelArt ? "pixelated" : "auto",
+      }}
     />
   );
 }
