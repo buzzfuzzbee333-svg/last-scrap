@@ -53,7 +53,7 @@ function RunPage() {
   return (
     <div className="relative flex min-h-screen flex-col bg-black">
       <HUD />
-      <div className="relative mx-auto w-full max-w-[min(100vw,90vh)]">
+      <div className="relative mx-auto w-full max-w-[min(100vw,calc(85vh*4/5))]">
         <Arena />
         <MobileControls />
         <button

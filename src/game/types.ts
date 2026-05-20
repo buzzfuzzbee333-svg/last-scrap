@@ -24,6 +24,7 @@ export interface Player {
   hpRegenAcc: number;   // fractional HP carry
   ammoRegenAcc: number; // fractional ammo carry
   hitRecentTimer: number; // pauses HP regen briefly after damage
+  vel: Vec2;              // smoothed velocity (px/sec) for fluid movement
 }
 
 export interface Bullet {
@@ -57,6 +58,7 @@ export interface Enemy {
   contactTimer: number;
   scrapReward: number;
   color: string;
+  vel: Vec2; // smoothed velocity for fluid steering
 }
 
 export type RunEndCause = "cashout" | "overrun" | "death" | "surrender";

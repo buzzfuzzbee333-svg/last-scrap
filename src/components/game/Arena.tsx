@@ -78,10 +78,11 @@ export function Arena() {
       const s = useRunStore.getState();
       const W = BALANCE.arena.width;
       const H = BALANCE.arena.height;
+      const SMOOTH = !BALANCE.render.pixelArt;
 
       // arena background (stretched to fill logical world)
+      ctx.imageSmoothingEnabled = SMOOTH;
       if (IMG.arena.complete && IMG.arena.naturalWidth > 0) {
-        ctx.imageSmoothingEnabled = false;
         ctx.drawImage(IMG.arena, 0, 0, W, H);
       } else {
         ctx.fillStyle = "#1a1614";
@@ -99,11 +100,11 @@ export function Arena() {
       ctx.font = "bold 18px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText("RIG", rig.pos.x, rig.pos.y);
 
-      // enemies as sprites
-      ctx.imageSmoothingEnabled = false;
+      // enemies as sprites (size from BALANCE.render.sprites for consistency)
+      ctx.imageSmoothingEnabled = SMOOTH;
       for (const e of s.enemies) {
         const img = e.kind === "brute" ? IMG.brute : IMG.shambler;
-        const size = e.radius * 2.4;
+        const size = e.kind === "brute" ? BALANCE.render.sprites.brute : BALANCE.render.sprites.shambler;
         if (img.complete && img.naturalWidth > 0) {
           // face toward rig horizontally
           const flip = e.pos.x > rig.pos.x ? -1 : 1;
@@ -130,7 +131,7 @@ export function Arena() {
 
       // player sprite, rotated to facing
       const P = s.player;
-      const pSize = 44;
+      const pSize = BALANCE.render.sprites.hero;
       if (IMG.hero.complete && IMG.hero.naturalWidth > 0) {
         ctx.save();
         ctx.translate(P.pos.x, P.pos.y);
@@ -185,7 +186,15 @@ export function Arena() {
       ref={canvasRef}
       width={BALANCE.arena.width}
       height={BALANCE.arena.height}
-      style={{ width: "100%", height: "auto", aspectRatio: "1 / 1", display: "block", background: "#1a1614", touchAction: "none" }}
+      style={{
+        width: "100%",
+        height: "auto",
+        aspectRatio: `${BALANCE.arena.width} / ${BALANCE.arena.height}`,
+        display: "block",
+        background: "#1a1614",
+        touchAction: "none",
+        imageRendering: BALANCE.render.pixelArt ? "pixelated" : "auto",
+      }}
     />
   );
 }

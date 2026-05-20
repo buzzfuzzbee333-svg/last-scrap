@@ -88,6 +88,7 @@ function makePlayer(upgrades: Partial<Record<UpgradeId, number>>): Player {
     hpRegenAcc: 0,
     ammoRegenAcc: 0,
     hitRecentTimer: 0,
+    vel: { x: 0, y: 0 },
   };
 }
 
@@ -129,6 +130,7 @@ function spawnEnemy(kind: EnemyKind): Enemy {
     radius: def.radius, aggroRadius: def.aggroRadius,
     contactInterval: def.contactDamageInterval, contactTimer: 0,
     scrapReward: def.scrapReward, color: def.color,
+    vel: { x: 0, y: 0 },
   };
 }
 
@@ -269,17 +271,24 @@ export const useRunStore = create<RunState>((set, get) => ({
     let unsecured = s.unsecured;
     let kills = s.kills;
 
-    // ----- Player movement -----
+    // ----- Player movement (smoothed via exponential lerp) -----
     const ix = s.input.moveX;
     const iy = s.input.moveY;
     const mag = Math.hypot(ix, iy);
+    let targetVx = 0, targetVy = 0;
     if (mag > 0.001 && P.alive) {
       const nx = ix / mag;
       const ny = iy / mag;
-      P.pos.x += nx * P.speed * dt;
-      P.pos.y += ny * P.speed * dt;
-      P.facing = Math.atan2(ny, nx);
+      targetVx = nx * P.speed;
+      targetVy = ny * P.speed;
     }
+    const pLerp = 1 - Math.exp(-BALANCE.motion.playerInputLerp * dt);
+    P.vel.x += (targetVx - P.vel.x) * pLerp;
+    P.vel.y += (targetVy - P.vel.y) * pLerp;
+    P.pos.x += P.vel.x * dt;
+    P.pos.y += P.vel.y * dt;
+    const vMag = Math.hypot(P.vel.x, P.vel.y);
+    if (vMag > 1) P.facing = Math.atan2(P.vel.y, P.vel.x);
     P.pos.x = Math.max(16, Math.min(BALANCE.arena.width - 16, P.pos.x));
     P.pos.y = Math.max(16, Math.min(BALANCE.arena.height - 16, P.pos.y));
     P.attackCooldown = Math.max(0, P.attackCooldown - dt);
@@ -374,12 +383,18 @@ export const useRunStore = create<RunState>((set, get) => ({
     // ----- Enemy AI + contact damage -----
     // Priority target is ALWAYS the rig. Enemies only "attack" the hero by
     // physical proximity (they walk past toward the rig and brush the player).
+    // Smoothly steer enemy velocity toward the rig (no instant snaps).
+    const eLerp = 1 - Math.exp(-BALANCE.motion.enemySteerLerp * dt);
     for (const e of enemies) {
       const dx = R.pos.x - e.pos.x;
       const dy = R.pos.y - e.pos.y;
       const m = Math.hypot(dx, dy) || 1;
-      e.pos.x += (dx / m) * e.speed * dt;
-      e.pos.y += (dy / m) * e.speed * dt;
+      const tvx = (dx / m) * e.speed;
+      const tvy = (dy / m) * e.speed;
+      e.vel.x += (tvx - e.vel.x) * eLerp;
+      e.vel.y += (tvy - e.vel.y) * eLerp;
+      e.pos.x += e.vel.x * dt;
+      e.pos.y += e.vel.y * dt;
       e.contactTimer = Math.max(0, e.contactTimer - dt);
 
       const dRig = dist(e.pos, R.pos);
