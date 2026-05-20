@@ -130,6 +130,7 @@ function spawnEnemy(kind: EnemyKind): Enemy {
     radius: def.radius, aggroRadius: def.aggroRadius,
     contactInterval: def.contactDamageInterval, contactTimer: 0,
     scrapReward: def.scrapReward, color: def.color,
+    vel: { x: 0, y: 0 },
   };
 }
 
