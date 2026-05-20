@@ -383,12 +383,18 @@ export const useRunStore = create<RunState>((set, get) => ({
     // ----- Enemy AI + contact damage -----
     // Priority target is ALWAYS the rig. Enemies only "attack" the hero by
     // physical proximity (they walk past toward the rig and brush the player).
+    // Smoothly steer enemy velocity toward the rig (no instant snaps).
+    const eLerp = 1 - Math.exp(-BALANCE.motion.enemySteerLerp * dt);
     for (const e of enemies) {
       const dx = R.pos.x - e.pos.x;
       const dy = R.pos.y - e.pos.y;
       const m = Math.hypot(dx, dy) || 1;
-      e.pos.x += (dx / m) * e.speed * dt;
-      e.pos.y += (dy / m) * e.speed * dt;
+      const tvx = (dx / m) * e.speed;
+      const tvy = (dy / m) * e.speed;
+      e.vel.x += (tvx - e.vel.x) * eLerp;
+      e.vel.y += (tvy - e.vel.y) * eLerp;
+      e.pos.x += e.vel.x * dt;
+      e.pos.y += e.vel.y * dt;
       e.contactTimer = Math.max(0, e.contactTimer - dt);
 
       const dRig = dist(e.pos, R.pos);
