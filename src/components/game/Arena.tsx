@@ -100,11 +100,11 @@ export function Arena() {
       ctx.font = "bold 18px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText("RIG", rig.pos.x, rig.pos.y);
 
-      // enemies as sprites
-      ctx.imageSmoothingEnabled = false;
+      // enemies as sprites (size from BALANCE.render.sprites for consistency)
+      ctx.imageSmoothingEnabled = SMOOTH;
       for (const e of s.enemies) {
         const img = e.kind === "brute" ? IMG.brute : IMG.shambler;
-        const size = e.radius * 2.4;
+        const size = e.kind === "brute" ? BALANCE.render.sprites.brute : BALANCE.render.sprites.shambler;
         if (img.complete && img.naturalWidth > 0) {
           // face toward rig horizontally
           const flip = e.pos.x > rig.pos.x ? -1 : 1;
