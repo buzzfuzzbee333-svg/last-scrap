@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useMetaStore } from "@/store/useMetaStore";
 import { UPGRADES, upgradeCost } from "@/game/data/upgrades";
+import { downloadSave, importSave } from "@/game/persistence";
 
 export const Route = createFileRoute("/upgrades")({
   head: () => ({ meta: [{ title: "Upgrades — Last Scrap" }] }),
@@ -13,8 +14,19 @@ function Upgrades() {
   const secured = useMetaStore((s) => s.securedScrap);
   const upgrades = useMetaStore((s) => s.upgrades);
   const buy = useMetaStore((s) => s.buyUpgrade);
+  const loadFromData = useMetaStore((s) => s.loadFromData);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { hydrate(); }, [hydrate]);
+
+  function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    importSave(file)
+      .then((data) => loadFromData(data))
+      .catch(() => alert("Failed to import save — invalid file."));
+    e.target.value = "";
+  }
 
   return (
     <div className="min-h-screen bg-stone-950 text-white">
@@ -57,6 +69,28 @@ function Upgrades() {
         <Link to="/play" className="mt-6 block w-full rounded border border-white/30 px-6 py-3 text-center font-semibold hover:bg-white/10">
           To Loadout
         </Link>
+
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={downloadSave}
+            className="flex-1 rounded border border-white/20 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+          >
+            ↓ Download Save
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex-1 rounded border border-white/20 px-3 py-2 text-sm text-white/70 hover:bg-white/10"
+          >
+            ↑ Import Save
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={handleImport}
+          />
+        </div>
       </div>
     </div>
   );
