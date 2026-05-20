@@ -1,6 +1,24 @@
 // Central tuning. Edit numbers here.
 export const BALANCE = {
-  arena: { width: 720, height: 720, rigRadius: 44, rigX: 360, rigY: 360 },
+  // Arena is 4:5 (portrait-ish) to better fit phone screens with HUD above.
+  arena: { width: 720, height: 900, rigRadius: 44, rigX: 360, rigY: 450 },
+  // Sprite rendering rules. Edit `pixelArt` to globally toggle crisp pixel scaling.
+  // Each sprite has an explicit pixel size in world units so swapping art keeps
+  // proportions consistent regardless of source PNG dimensions.
+  render: {
+    pixelArt: true, // true = nearest-neighbor (crisp), false = smooth bilinear
+    sprites: {
+      hero: 56,
+      brute: 64,
+      shambler: 44,
+    },
+  },
+  // Movement smoothing: lerp factors per second. Higher = snappier, lower = floatier.
+  // Applied via 1 - exp(-rate * dt) so it is framerate-independent.
+  motion: {
+    playerInputLerp: 18,  // how fast input direction blends (smooths joystick)
+    enemySteerLerp: 6,    // how fast enemies turn toward the rig
+  },
   player: {
     baseMaxHp: 100,
     baseAttack: 20,
