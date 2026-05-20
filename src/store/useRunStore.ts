@@ -271,17 +271,24 @@ export const useRunStore = create<RunState>((set, get) => ({
     let unsecured = s.unsecured;
     let kills = s.kills;
 
-    // ----- Player movement -----
+    // ----- Player movement (smoothed via exponential lerp) -----
     const ix = s.input.moveX;
     const iy = s.input.moveY;
     const mag = Math.hypot(ix, iy);
+    let targetVx = 0, targetVy = 0;
     if (mag > 0.001 && P.alive) {
       const nx = ix / mag;
       const ny = iy / mag;
-      P.pos.x += nx * P.speed * dt;
-      P.pos.y += ny * P.speed * dt;
-      P.facing = Math.atan2(ny, nx);
+      targetVx = nx * P.speed;
+      targetVy = ny * P.speed;
     }
+    const pLerp = 1 - Math.exp(-BALANCE.motion.playerInputLerp * dt);
+    P.vel.x += (targetVx - P.vel.x) * pLerp;
+    P.vel.y += (targetVy - P.vel.y) * pLerp;
+    P.pos.x += P.vel.x * dt;
+    P.pos.y += P.vel.y * dt;
+    const vMag = Math.hypot(P.vel.x, P.vel.y);
+    if (vMag > 1) P.facing = Math.atan2(P.vel.y, P.vel.x);
     P.pos.x = Math.max(16, Math.min(BALANCE.arena.width - 16, P.pos.x));
     P.pos.y = Math.max(16, Math.min(BALANCE.arena.height - 16, P.pos.y));
     P.attackCooldown = Math.max(0, P.attackCooldown - dt);
