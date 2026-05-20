@@ -78,10 +78,11 @@ export function Arena() {
       const s = useRunStore.getState();
       const W = BALANCE.arena.width;
       const H = BALANCE.arena.height;
+      const SMOOTH = !BALANCE.render.pixelArt;
 
       // arena background (stretched to fill logical world)
+      ctx.imageSmoothingEnabled = SMOOTH;
       if (IMG.arena.complete && IMG.arena.naturalWidth > 0) {
-        ctx.imageSmoothingEnabled = false;
         ctx.drawImage(IMG.arena, 0, 0, W, H);
       } else {
         ctx.fillStyle = "#1a1614";
