@@ -58,6 +58,7 @@ export interface Enemy {
   contactTimer: number;
   scrapReward: number;
   color: string;
+  vel: Vec2; // smoothed velocity for fluid steering
 }
 
 export type RunEndCause = "cashout" | "overrun" | "death" | "surrender";
