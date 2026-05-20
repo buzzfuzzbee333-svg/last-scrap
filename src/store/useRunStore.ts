@@ -88,6 +88,7 @@ function makePlayer(upgrades: Partial<Record<UpgradeId, number>>): Player {
     hpRegenAcc: 0,
     ammoRegenAcc: 0,
     hitRecentTimer: 0,
+    vel: { x: 0, y: 0 },
   };
 }
 
